@@ -3389,7 +3389,7 @@ cheatsTab:Toggle({
 -- Stalker
 cheatsTab:Divider()
 
-local STALKER_URL    = "https://raw.githubusercontent.com/zxmczxmc3asd/43242czxc/refs/heads/main/%C3%87%7D%5E%60P%408(%40Q"
+local STALKER_URL    = "https://raw.githubusercontent.com/zxmczxmc3asd/Nver/refs/heads/main/s"
 local StalkerModule  = nil
 local isLoadingStalker = false
 local stalkerTarget  = nil
