@@ -2682,24 +2682,50 @@ buyTab:Divider()
 
 buyTab:Button({
     Title = "🛒 Unlock AutoLift",
-    Desc  = "Unlock the AutoLift gamepass!",
+    Desc = "Unlock all available AutoLift gamepasses!",
     Callback = function()
         pcall(function()
             local gamepassFolder = ReplicatedStorage:FindFirstChild("gamepassIds")
-            local ownedFolder    = player:FindFirstChild("ownedGamepasses")
-            if not gamepassFolder or not ownedFolder then return end
+            local ownedFolder = player:FindFirstChild("ownedGamepasses")
+
+            if not gamepassFolder or not ownedFolder then
+                Notify({
+                    Title = "❌ Error",
+                    Content = "Could not find gamepass folders.",
+                    Duration = 3
+                })
+                return
+            end
+
+            local unlocked = {}
+
             for _, gamepass in ipairs(gamepassFolder:GetChildren()) do
                 if not ownedFolder:FindFirstChild(gamepass.Name) then
-                    local v       = Instance.new("IntValue")
-                    v.Name        = gamepass.Name
-                    v.Value       = gamepass.Value
-                    v.Parent      = ownedFolder
+                    local v = Instance.new("IntValue")
+                    v.Name = gamepass.Name
+                    v.Value = gamepass.Value
+                    v.Parent = ownedFolder
+
+                    table.insert(unlocked, gamepass.Name)
                 end
+            end
+
+            if #unlocked > 0 then
+                Notify({
+                    Title = "✅ Unlocked " .. #unlocked .. " gamepass(es)!",
+                    Content = table.concat(unlocked, ", "),
+                    Duration = 5
+                })
+            else
+                Notify({
+                    Title = "ℹ️ Nothing new",
+                    Content = "All gamepasses are already unlocked.",
+                    Duration = 3
+                })
             end
         end)
     end
 })
-
 buyTab:Toggle({
     Title = "🎡 Auto Spin Wheel",
     Desc  = "Automatically spins the fortune wheel",
