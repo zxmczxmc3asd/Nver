@@ -2278,7 +2278,6 @@ combatTab:Toggle({
         State.AutoKill.Enabled = state
         
         if state then
-            -- Guarda o momento exato em que o AutoKill foi ativado
             State.KillStats.StartTime = tick()  
             
             task.spawn(function()
@@ -2294,7 +2293,7 @@ combatTab:Toggle({
                                 local hrp  = char and char:FindFirstChild("HumanoidRootPart")
                                 local hum  = char and char:FindFirstChildOfClass("Humanoid")
                                 if hrp and hum and hum.Health > 0 then
-                                    table.insert(targets, { player = p, dist = (localHrp.Position - hrp.Position).Magnitude })
+                                    table.insert(targets, { player = p, humanoid = hum, dist = (localHrp.Position - hrp.Position).Magnitude })
                                 end
                             end
                         end
@@ -2304,13 +2303,20 @@ combatTab:Toggle({
                         for _, t in ipairs(targets) do
                             if not State.AutoKill.Enabled then break end
                             
-                            ExecuteKill(t.player)
-
-                            -- Registra o kill e o tempo do último abate
-                            State.KillStats.TotalKills = State.KillStats.TotalKills + 1
-                            State.KillStats.LastKillTime = tick()
-                            
-                            UpdateKillStats()  
+                            -- Verifica se o inimigo ainda está vivo antes de atacar
+                            if t.humanoid and t.humanoid.Health > 0 then
+                                ExecuteKill(t.player)
+                                
+                                -- Pequena espera para o dano do jogo processar (ajuste se necessário)
+                                task.wait(0.02) 
+                                
+                                -- CHECAGEM REAL: Só conta o kill se a vida dele zerou após o ataque
+                                if t.humanoid.Health <= 0 then
+                                    State.KillStats.TotalKills = State.KillStats.TotalKills + 1
+                                    State.KillStats.LastKillTime = tick()
+                                    UpdateKillStats()  
+                                end
+                            end
 
                             task.wait(State.AutoKill.FastPunch and 0.01 or 0.05)
                         end
@@ -2321,12 +2327,12 @@ combatTab:Toggle({
                 end
             end)
         else
-            -- Quando desativar, reseta o tempo inicial e atualiza a UI
             State.KillStats.StartTime = nil
             UpdateKillStats()
         end
     end
 })
+
 combatTab:Toggle({
     Title = "⚡ Fast Kill Mode",
     Desc  = "Makes attacks extremely fast",
