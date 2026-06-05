@@ -1,0 +1,563 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local stats = player:WaitForChild("leaderstats")
+local rebirthsValue = stats:WaitForChild("Rebirths")
+
+-- ============================================================
+-- ROCK DATA
+-- ============================================================
+local rockData = {
+	{ name = "Ancient Jungle", icon = "🌴" },
+	{ name = "Muscle King",    icon = "👑" },
+	{ name = "Legends Gym",    icon = "💎" },
+	{ name = "Inferno",        icon = "🔥" },
+	{ name = "Mystic",         icon = "🔮" },
+	{ name = "Frozen",         icon = "❄️"  },
+	{ name = "Golden",         icon = "⭐" },
+	{ name = "Tiny",           icon = "⚡" },
+}
+
+-- ============================================================
+-- GLITCH LOOKUP TABLES  { rebirth, stats_bonus, preXP }
+-- ============================================================
+local glitchLists = {
+	["Ancient Jungle"] = {
+		{56,5,15},{208,10,45},{440,15,25},{748,20,20},{1132,25,30},
+		{1592,30,55},{2132,35,30},{2748,40,20},{3440,45,25},{4208,50,45},
+		{5056,55,15},{5980,60,0},{6980,65,0},{8056,70,15},{9208,75,45},
+		{10440,80,25},{11748,85,20},{13132,90,30},{14580,95,250},
+	},
+	["Muscle King"] = {
+		{80,5,0},{280,10,0},{580,15,0},{980,20,0},{1480,25,0},
+		{2080,30,0},{2780,35,0},{3580,40,0},{4480,45,0},{5480,50,0},
+		{6580,55,0},{7780,60,0},{9080,65,0},{10480,70,0},{11980,75,0},
+		{13580,80,0},{15280,85,0},{17080,90,0},{18980,95,0},
+	},
+	["Legends Gym"] = {
+		{30,5,0},{480,5,0},{1480,10,0},{2980,15,0},{4980,20,0},{7480,25,0},
+		{10480,30,0},{13980,35,0},{17980,40,0},{22480,45,0},{27480,50,0},
+		{32980,55,0},{38980,60,0},{45480,65,0},{52480,70,0},{59980,75,0},
+		{67980,80,0},{76480,85,0},{85480,90,0},{94980,95,0},
+	},
+	["Inferno"] = {
+		{1084,5,8},{3308,10,6},{6644,15,3},{11084,20,8},{16644,25,3},
+		{23308,30,6},{31084,35,8},{39980,40,0},{49980,45,0},{61084,50,8},
+		{73308,55,6},{86644,60,3},{101084,65,8},{116644,70,3},{133308,75,6},
+		{151084,80,8},{169980,85,0},{189980,90,0},{211084,95,8},
+	},
+	["Mystic"] = {
+		{1644,5,2},{4980,10,0},{9980,15,0},{16644,20,2},{24980,25,0},
+		{34980,30,0},{46644,35,2},{59980,40,0},{74980,45,0},{91644,50,2},
+		{109980,55,0},{129980,60,0},{151644,65,2},{174980,70,0},{199980,75,0},
+		{226644,80,2},{254980,85,0},{284980,90,0},{316644,95,2},
+	},
+	["Frozen"] = {
+		{3308,5,2},{9980,10,0},{19980,15,0},{33308,20,2},{49980,25,0},
+		{69980,30,0},{93308,35,2},{119980,40,0},{149980,45,0},{183308,50,2},
+		{219980,55,0},{259980,60,0},{303308,65,2},{349980,70,0},{399980,75,0},
+		{453308,80,2},{509980,85,0},{569980,90,0},{633308,95,2},
+	},
+	["Golden"] = {
+		{6230,5,0},{18730,10,0},{37480,15,0},{62480,20,0},{93730,25,0},
+		{131230,30,0},{174980,35,0},{224980,40,0},{281230,45,0},{343730,50,0},
+		{412480,55,0},{487480,60,0},{568730,65,0},{656230,70,0},{749980,75,0},
+		{849980,80,0},{956230,85,0},{1068730,90,0},{1187480,95,0},
+	},
+	["Tiny"] = {
+		{49980,5,0},{149980,10,0},{299980,15,0},{499980,20,0},{749980,25,0},
+		{1049980,30,0},{1399980,35,0},{1799980,40,0},{2249980,45,0},{2749980,50,0},
+		{3299980,55,0},{3899980,60,0},{4549980,65,0},{5249980,70,0},{5999980,75,0},
+		{6799980,80,0},{7649980,85,0},{8549980,90,0},{9499980,95,0},
+	},
+}
+
+local function getNextGlitches(reb, rockName, count)
+	local list = glitchLists[rockName]
+	if not list then return {} end
+	local out = {}
+	for _, e in ipairs(list) do
+		if e[1] > reb then
+			table.insert(out, {reb=e[1], stats=e[2], preXP=e[3]})
+			if #out >= (count or 3) then break end
+		end
+	end
+	return out
+end
+
+-- ============================================================
+-- DETECT MOBILE
+-- ============================================================
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local VP = workspace.CurrentCamera.ViewportSize
+
+-- ============================================================
+-- COLORS
+-- ============================================================
+local RED      = Color3.fromRGB(210, 30,  30)
+local RED_DARK = Color3.fromRGB(110, 15,  15)
+local RED_DIM  = Color3.fromRGB(50,  10,  10)
+local RED_GLOW = Color3.fromRGB(255, 70,  70)
+local BG       = Color3.fromRGB(8,   8,   10)
+local SURFACE  = Color3.fromRGB(14,  14,  18)
+local CARD     = Color3.fromRGB(20,  20,  25)
+local WHITE    = Color3.fromRGB(255, 255, 255)
+local GRAY     = Color3.fromRGB(130, 130, 145)
+local DIMGRAY  = Color3.fromRGB(65,  65,  78)
+local BORDER   = Color3.fromRGB(36,  36,  46)
+local GREEN    = Color3.fromRGB(50,  210, 95)
+local AMBER    = Color3.fromRGB(255, 185, 35)
+local BLUE     = Color3.fromRGB(85,  175, 255)
+
+-- ============================================================
+-- LAYOUT CONSTANTS  (definidos antes de tudo)
+-- ============================================================
+local GAP     = isMobile and 3 or 5
+local LABEL_H = isMobile and 20 or 32
+
+-- ============================================================
+-- HELPERS
+-- ============================================================
+local function corner(p, r)
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r or 8); c.Parent = p
+end
+local function stroke(p, col, thick, trans)
+	local s = Instance.new("UIStroke"); s.Color=col or BORDER; s.Thickness=thick or 1; s.Transparency=trans or 0; s.Parent=p; return s
+end
+local function lbl(p, txt, col, font, sz, size, pos, zi, align)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency=1; l.BorderSizePixel=0
+	l.Text=txt; l.TextColor3=col or WHITE
+	l.Font=font or Enum.Font.GothamMedium; l.TextSize=sz or 13
+	l.Size=size or UDim2.new(1,0,0,20); l.Position=pos or UDim2.new(0,0,0,0)
+	l.ZIndex=zi or 5; l.TextXAlignment=align or Enum.TextXAlignment.Left; l.TextWrapped=true
+	l.Parent=p; return l
+end
+local function pad(p, l2, r, t, b)
+	local u = Instance.new("UIPadding")
+	u.PaddingLeft=UDim.new(0,l2 or 0); u.PaddingRight=UDim.new(0,r or 0)
+	u.PaddingTop=UDim.new(0,t or 0);   u.PaddingBottom=UDim.new(0,b or 0)
+	u.Parent=p
+end
+local function makeDraggable(f)
+	local drag,ds,sp
+	f.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			drag=true; ds=i.Position; sp=f.Position
+			i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then drag=false end end)
+		end
+	end)
+	f.InputChanged:Connect(function(i)
+		if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+			local d=i.Position-ds
+			f.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y)
+		end
+	end)
+end
+
+-- ============================================================
+-- GUI
+-- ============================================================
+local gui = Instance.new("ScreenGui")
+gui.Name="GlitchCalc"; gui.ResetOnSpawn=false
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+gui.IgnoreGuiInset=true; gui.Parent=player:WaitForChild("PlayerGui")
+
+local bgFr = Instance.new("Frame")
+bgFr.Size=UDim2.new(1,0,1,0); bgFr.BackgroundColor3=Color3.new(0,0,0)
+bgFr.BackgroundTransparency=0.5; bgFr.BorderSizePixel=0
+bgFr.Active=false; bgFr.ZIndex=1; bgFr.Parent=gui
+
+-- ============================================================
+-- TAMANHOS
+-- ============================================================
+local HDR_H  = isMobile and 48  or 84
+local BOX_H  = isMobile and 32  or 50
+local BTN_H  = isMobile and 32  or 64
+local CALC_H = isMobile and 34  or 54
+
+-- Altura do grid de rocks: 2 linhas + gap
+local gridH2 = BTN_H*2 + GAP
+
+-- Altura das seções
+local REB_H  = HDR_H  -- reutiliza proporcionalmente: label + box + margens
+-- Recalcula mais preciso:
+REB_H = LABEL_H + BOX_H + (isMobile and 18 or 32)
+
+local ROCK_H = LABEL_H + gridH2 + (isMobile and 18 or 32)
+
+-- Largura e altura da janela
+local W = isMobile and math.clamp(VP.X*0.88, 260, 320) or 490
+-- Altura fixa: cabeçalho + rebirth + rock + botão + margens do scroll
+-- O scroll cuida do resto (resultados), então a janela tem altura limitada
+local H = isMobile
+	and math.clamp(VP.Y * 0.72, 340, VP.Y - 60)  -- máximo VP.Y-60 para não ultrapassar tela
+	or  490
+
+-- ============================================================
+-- JANELA PRINCIPAL
+-- ============================================================
+local win = Instance.new("Frame")
+win.Size=UDim2.new(0,W,0,H); win.Position=UDim2.new(0.5,0,0.5,0)
+win.AnchorPoint=Vector2.new(0.5,0.5); win.BackgroundColor3=BG
+win.BorderSizePixel=0; win.ZIndex=10; win.Active=true; win.Parent=gui
+corner(win,12); stroke(win,RED,1.5,0.35); makeDraggable(win)
+
+-- ============================================================
+-- HEADER
+-- ============================================================
+local hdr = Instance.new("Frame")
+hdr.Size=UDim2.new(1,0,0,HDR_H); hdr.BackgroundColor3=SURFACE
+hdr.BorderSizePixel=0; hdr.ZIndex=11; hdr.Parent=win
+corner(hdr,12)
+
+local hpatch=Instance.new("Frame"); hpatch.Size=UDim2.new(1,0,0,12)
+hpatch.Position=UDim2.new(0,0,1,-12); hpatch.BackgroundColor3=SURFACE
+hpatch.BorderSizePixel=0; hpatch.ZIndex=11; hpatch.Active=false; hpatch.Parent=hdr
+
+local ts=Instance.new("Frame"); ts.Size=UDim2.new(1,0,0,3)
+ts.BackgroundColor3=RED; ts.BorderSizePixel=0; ts.ZIndex=12; ts.Parent=hdr; corner(ts,12)
+
+local hl=Instance.new("Frame"); hl.Size=UDim2.new(1,0,0,1); hl.Position=UDim2.new(0,0,1,-1)
+hl.BackgroundColor3=RED_DARK; hl.BorderSizePixel=0; hl.ZIndex=11; hl.Parent=hdr
+
+local IB = isMobile and 24 or 42
+local ibadge=Instance.new("Frame"); ibadge.Size=UDim2.new(0,IB,0,IB)
+ibadge.Position=UDim2.new(0,10,0.5,-(IB/2)); ibadge.BackgroundColor3=RED_DARK
+ibadge.BorderSizePixel=0; ibadge.ZIndex=12; ibadge.Parent=hdr
+corner(ibadge,6); stroke(ibadge,RED,1.5,0.3)
+lbl(ibadge,"⚡",WHITE,Enum.Font.GothamBold,isMobile and 12 or 22,UDim2.new(1,0,1,0),UDim2.new(0,0,0,0),13,Enum.TextXAlignment.Center)
+
+local TX = IB+16
+lbl(hdr,"GLITCH CALCULATOR",WHITE,Enum.Font.GothamBold,isMobile and 11 or 20,
+	UDim2.new(1,-(TX+40),0,isMobile and 14 or 28),UDim2.new(0,TX,0,isMobile and 7 or 14),12)
+lbl(hdr,"by mzx  •  Unique Pets Only",DIMGRAY,Enum.Font.Gotham,isMobile and 8 or 11,
+	UDim2.new(1,-(TX+40),0,12),UDim2.new(0,TX,0,isMobile and 23 or 46),12)
+
+local closeBtn=Instance.new("TextButton"); closeBtn.Size=UDim2.new(0,22,0,22)
+closeBtn.Position=UDim2.new(1,-30,0,isMobile and 7 or 16); closeBtn.BackgroundColor3=RED_DIM
+closeBtn.Text="X"; closeBtn.TextColor3=RED_GLOW; closeBtn.Font=Enum.Font.GothamBold
+closeBtn.TextSize=11; closeBtn.BorderSizePixel=0; closeBtn.ZIndex=13; closeBtn.Parent=hdr
+corner(closeBtn,5); stroke(closeBtn,RED,1,0.4)
+closeBtn.MouseButton1Click:Connect(function()
+	TweenService:Create(win,TweenInfo.new(0.2,Enum.EasingStyle.Back,Enum.EasingDirection.In),{Size=UDim2.new(0,0,0,0)}):Play()
+	TweenService:Create(bgFr,TweenInfo.new(0.2),{BackgroundTransparency=1}):Play()
+	task.wait(0.25); gui:Destroy()
+end)
+
+-- ============================================================
+-- SCROLL FRAME
+-- ============================================================
+local scr=Instance.new("ScrollingFrame")
+scr.Size=UDim2.new(1,-10,1,-(HDR_H+6)); scr.Position=UDim2.new(0,5,0,HDR_H+4)
+scr.BackgroundTransparency=1; scr.BorderSizePixel=0
+scr.ScrollBarThickness=2; scr.ScrollBarImageColor3=RED
+scr.CanvasSize=UDim2.new(0,0,0,0); scr.AutomaticCanvasSize=Enum.AutomaticSize.Y
+scr.ClipsDescendants=true; scr.ZIndex=10; scr.Parent=win
+
+local scrList=Instance.new("UIListLayout")
+scrList.Padding=UDim.new(0,isMobile and 4 or 8); scrList.HorizontalAlignment=Enum.HorizontalAlignment.Center
+scrList.SortOrder=Enum.SortOrder.LayoutOrder; scrList.Parent=scr
+pad(scr,0,0,6,10)
+
+-- ============================================================
+-- REBIRTH SECTION
+-- ============================================================
+local rebSec=Instance.new("Frame"); rebSec.Size=UDim2.new(1,0,0,REB_H)
+rebSec.BackgroundColor3=CARD; rebSec.BorderSizePixel=0; rebSec.LayoutOrder=1; rebSec.ZIndex=11; rebSec.Parent=scr
+corner(rebSec,8); stroke(rebSec,BORDER,1,0)
+
+local rb1=Instance.new("Frame"); rb1.Size=UDim2.new(0,3,1,0)
+rb1.BackgroundColor3=RED; rb1.BorderSizePixel=0; rb1.ZIndex=12; rb1.Parent=rebSec; corner(rb1,2)
+
+lbl(rebSec,"◈  YOUR CURRENT REBIRTH",RED,Enum.Font.GothamBold,isMobile and 8 or 11,
+	UDim2.new(1,-20,0,LABEL_H),UDim2.new(0,12,0,isMobile and 4 or 10),12)
+
+local rebBox=Instance.new("TextBox")
+rebBox.Size=UDim2.new(0.58,-8,0,BOX_H); rebBox.Position=UDim2.new(0,12,0,LABEL_H+(isMobile and 4 or 10))
+rebBox.BackgroundColor3=SURFACE; rebBox.Text=tostring(rebirthsValue.Value)
+rebBox.PlaceholderText="ex: 18980"; rebBox.TextColor3=WHITE; rebBox.PlaceholderColor3=DIMGRAY
+rebBox.Font=Enum.Font.GothamBold; rebBox.TextSize=isMobile and 16 or 28
+rebBox.BorderSizePixel=0; rebBox.ClearTextOnFocus=true; rebBox.ZIndex=12; rebBox.Parent=rebSec
+corner(rebBox,7)
+local rebSt=stroke(rebBox,RED_DARK,1.5,0.3)
+rebBox.Focused:Connect(function() TweenService:Create(rebSt,TweenInfo.new(0.15),{Color=RED,Transparency=0}):Play() end)
+rebBox.FocusLost:Connect(function()  TweenService:Create(rebSt,TweenInfo.new(0.15),{Color=RED_DARK,Transparency=0.3}):Play() end)
+local rp=Instance.new("UIPadding"); rp.PaddingLeft=UDim.new(0,8); rp.Parent=rebBox
+
+local autoBtn=Instance.new("TextButton")
+autoBtn.Size=UDim2.new(0.42,-16,0,BOX_H); autoBtn.Position=UDim2.new(0.58,6,0,LABEL_H+(isMobile and 4 or 10))
+autoBtn.BackgroundColor3=RED_DIM; autoBtn.Text="🔄  Auto"
+autoBtn.TextColor3=RED_GLOW; autoBtn.Font=Enum.Font.GothamBold
+autoBtn.TextSize=isMobile and 10 or 13; autoBtn.BorderSizePixel=0; autoBtn.ZIndex=12; autoBtn.Parent=rebSec
+corner(autoBtn,7); stroke(autoBtn,RED,1,0.45)
+autoBtn.MouseButton1Click:Connect(function()
+	rebBox.Text=tostring(rebirthsValue.Value)
+	TweenService:Create(autoBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(12,55,22)}):Play()
+	task.wait(0.3)
+	TweenService:Create(autoBtn,TweenInfo.new(0.2),{BackgroundColor3=RED_DIM}):Play()
+end)
+
+-- ============================================================
+-- ROCK SECTION
+-- ============================================================
+local rockSec=Instance.new("Frame"); rockSec.Size=UDim2.new(1,0,0,ROCK_H)
+rockSec.BackgroundColor3=CARD; rockSec.BorderSizePixel=0; rockSec.LayoutOrder=2; rockSec.ZIndex=11; rockSec.Parent=scr
+corner(rockSec,8); stroke(rockSec,BORDER,1,0)
+
+local rb2=Instance.new("Frame"); rb2.Size=UDim2.new(0,3,1,0)
+rb2.BackgroundColor3=RED; rb2.BorderSizePixel=0; rb2.ZIndex=12; rb2.Parent=rockSec; corner(rb2,2)
+
+lbl(rockSec,"◈  SELECT ROCK",RED,Enum.Font.GothamBold,isMobile and 8 or 11,
+	UDim2.new(1,-20,0,LABEL_H),UDim2.new(0,12,0,isMobile and 4 or 10),12)
+
+local gridCon=Instance.new("Frame")
+gridCon.Size=UDim2.new(1,-20,0,gridH2)
+gridCon.Position=UDim2.new(0,10,0,LABEL_H+(isMobile and 4 or 10))
+gridCon.BackgroundTransparency=1; gridCon.ZIndex=12; gridCon.Parent=rockSec
+
+local gl=Instance.new("UIGridLayout")
+gl.CellSize=UDim2.new(0.25,-3,0,BTN_H); gl.CellPadding=UDim2.new(0,3,0,GAP)
+gl.SortOrder=Enum.SortOrder.LayoutOrder; gl.Parent=gridCon
+
+local selectedIdx=2
+local rockBtns={}
+for i,rock in ipairs(rockData) do
+	local sel=(i==selectedIdx)
+	local btn=Instance.new("TextButton")
+	btn.BackgroundColor3=sel and RED_DIM or SURFACE; btn.Text=""
+	btn.BorderSizePixel=0; btn.ZIndex=13; btn.LayoutOrder=i; btn.Parent=gridCon
+	corner(btn,7)
+	local bs=stroke(btn,sel and RED or BORDER,sel and 1.5 or 1,0)
+
+	lbl(btn,rock.icon,WHITE,Enum.Font.GothamBold,isMobile and 14 or 24,
+		UDim2.new(1,0,0,BTN_H-(isMobile and 15 or 26)),
+		UDim2.new(0,0,0,isMobile and 2 or 5),14,Enum.TextXAlignment.Center)
+
+	local nl=lbl(btn,rock.name,sel and WHITE or GRAY,Enum.Font.GothamBold,isMobile and 5 or 9,
+		UDim2.new(1,-2,0,isMobile and 10 or 16),
+		UDim2.new(0,1,1,-(isMobile and 10 or 18)),14,Enum.TextXAlignment.Center)
+
+	rockBtns[i]={btn=btn,st=bs,nl=nl}
+end
+for i,d in ipairs(rockBtns) do
+	d.btn.MouseButton1Click:Connect(function()
+		selectedIdx=i
+		for j,dd in ipairs(rockBtns) do
+			local s=(j==i)
+			TweenService:Create(dd.btn,TweenInfo.new(0.13),{BackgroundColor3=s and RED_DIM or SURFACE}):Play()
+			TweenService:Create(dd.st,TweenInfo.new(0.13),{Color=s and RED or BORDER,Thickness=s and 1.5 or 1}):Play()
+			dd.nl.TextColor3=s and WHITE or GRAY
+		end
+	end)
+end
+
+-- ============================================================
+-- CALCULATE BUTTON
+-- ============================================================
+local calcBtn=Instance.new("TextButton")
+calcBtn.Size=UDim2.new(1,0,0,CALC_H); calcBtn.BackgroundColor3=RED
+calcBtn.Text="⚡  CALCULATE GLITCH"; calcBtn.TextColor3=WHITE
+calcBtn.Font=Enum.Font.GothamBold; calcBtn.TextSize=isMobile and 12 or 17
+calcBtn.BorderSizePixel=0; calcBtn.LayoutOrder=3; calcBtn.ZIndex=11; calcBtn.Parent=scr
+corner(calcBtn,8)
+calcBtn.MouseEnter:Connect(function() TweenService:Create(calcBtn,TweenInfo.new(0.1),{BackgroundColor3=RED_GLOW}):Play() end)
+calcBtn.MouseLeave:Connect(function() TweenService:Create(calcBtn,TweenInfo.new(0.1),{BackgroundColor3=RED}):Play() end)
+
+-- ============================================================
+-- RESULT CONTAINER
+-- ============================================================
+local resCon=Instance.new("Frame")
+resCon.Size=UDim2.new(1,0,0,0); resCon.AutomaticSize=Enum.AutomaticSize.Y
+resCon.BackgroundTransparency=1; resCon.LayoutOrder=4; resCon.ZIndex=11; resCon.Visible=false; resCon.Parent=scr
+
+local resList=Instance.new("UIListLayout")
+resList.Padding=UDim.new(0,isMobile and 3 or 6); resList.SortOrder=Enum.SortOrder.LayoutOrder; resList.Parent=resCon
+
+local div=Instance.new("Frame"); div.Size=UDim2.new(1,0,0,1)
+div.BackgroundColor3=RED_DARK; div.BackgroundTransparency=0.4
+div.BorderSizePixel=0; div.LayoutOrder=0; div.ZIndex=11; div.Parent=resCon
+
+-- ============================================================
+-- CARD BUILDERS
+-- ============================================================
+local resultCards={}
+
+local function estimateLines(txt, textSize, availWidth)
+	local charsPerLine = math.max(1, math.floor(availWidth / (textSize * 0.55)))
+	local lines = 1
+	local col = 0
+	for word in txt:gmatch("%S+") do
+		col = col + #word + 1
+		if col > charsPerLine then lines = lines + 1; col = #word + 1 end
+	end
+	for _ in txt:gmatch("\n") do lines = lines + 1 end
+	return lines
+end
+
+local function makeCard(icon, lbtxt, mainTxt, accent, subTxt, order)
+	local LX      = 12
+	local RX      = 8
+	local TS_lbl  = isMobile and 8 or 11
+	local TS_main = isMobile and 12 or 18
+	local TS_sub  = isMobile and 8 or 11
+	local LH_lbl  = isMobile and 12 or 20
+	local LH_main = isMobile and 16 or 27
+	local LH_sub  = isMobile and 11 or 16
+	local TOP     = 6
+	local BOT     = 6
+
+	local availW  = W - 14*2 - LX - RX
+
+	local subLines = 0
+	if subTxt and subTxt ~= "" then
+		subLines = estimateLines(subTxt, TS_sub, availW)
+	end
+
+	local cardH = TOP + LH_lbl + 2 + LH_main + (subLines > 0 and (2 + LH_sub * subLines) or 0) + BOT
+
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(1,0,0,cardH)
+	card.BackgroundColor3 = Color3.fromRGB(16,16,20)
+	card.BorderSizePixel = 0
+	card.LayoutOrder = order or 1
+	card.ZIndex = 12
+	card.Parent = resCon
+	corner(card,7); stroke(card,BORDER,1,0)
+
+	local bar=Instance.new("Frame"); bar.Size=UDim2.new(0,3,1,0)
+	bar.BackgroundColor3=accent; bar.BorderSizePixel=0; bar.ZIndex=13; bar.Parent=card; corner(bar,2)
+
+	local y = TOP
+	lbl(card, icon.."  "..lbtxt, DIMGRAY, Enum.Font.GothamMedium, TS_lbl,
+		UDim2.new(1,-(LX+RX),0,LH_lbl), UDim2.new(0,LX,0,y), 13)
+	y = y + LH_lbl + 2
+
+	lbl(card, mainTxt, accent, Enum.Font.GothamBold, TS_main,
+		UDim2.new(1,-(LX+RX),0,LH_main), UDim2.new(0,LX,0,y), 13)
+	y = y + LH_main + 2
+
+	if subTxt and subTxt ~= "" then
+		lbl(card, subTxt, GRAY, Enum.Font.Gotham, TS_sub,
+			UDim2.new(1,-(LX+RX),0,LH_sub*subLines), UDim2.new(0,LX,0,y), 13)
+	end
+
+	table.insert(resultCards,card); return card
+end
+
+local function makePreXP(amount, order)
+	local LX      = 12
+	local RX      = 8
+	local TS_ttl  = isMobile and 9 or 13
+	local TS_sub  = isMobile and 8 or 11
+	local LH_ttl  = isMobile and 13 or 22
+	local LH_sub  = isMobile and 11 or 16
+	local TOP     = 6
+	local BOT     = 6
+
+	local availW  = W - 14*2 - LX - RX
+	local subTxt  = "Add +"..amount.." EXP ao pet ANTES de glitchar\n(use esteira ou outra rock)"
+	local subLines= estimateLines(subTxt, TS_sub, availW)
+	local cardH   = TOP + LH_ttl + 3 + LH_sub*subLines + BOT
+
+	local card=Instance.new("Frame")
+	card.Size=UDim2.new(1,0,0,cardH); card.BackgroundColor3=Color3.fromRGB(34,24,7)
+	card.BorderSizePixel=0; card.LayoutOrder=order or 1; card.ZIndex=12; card.Parent=resCon
+	corner(card,7); stroke(card,AMBER,1.5,0.3)
+
+	local bar=Instance.new("Frame"); bar.Size=UDim2.new(0,3,1,0)
+	bar.BackgroundColor3=AMBER; bar.BorderSizePixel=0; bar.ZIndex=13; bar.Parent=card; corner(bar,2)
+
+	local y = TOP
+	lbl(card,"⚠️  PRE-LOAD REQUIRED",AMBER,Enum.Font.GothamBold,TS_ttl,
+		UDim2.new(1,-(LX+RX),0,LH_ttl),UDim2.new(0,LX,0,y),13)
+	y = y + LH_ttl + 3
+
+	lbl(card, subTxt, Color3.fromRGB(185,145,65), Enum.Font.Gotham, TS_sub,
+		UDim2.new(1,-(LX+RX),0,LH_sub*subLines), UDim2.new(0,LX,0,y), 13)
+
+	table.insert(resultCards,card); return card
+end
+
+-- ============================================================
+-- CALCULATE LOGIC
+-- ============================================================
+calcBtn.MouseButton1Click:Connect(function()
+	TweenService:Create(calcBtn,TweenInfo.new(0.07),{Size=UDim2.new(1,-6,0,CALC_H-3)}):Play()
+	task.wait(0.07)
+	TweenService:Create(calcBtn,TweenInfo.new(0.1),{Size=UDim2.new(1,0,0,CALC_H)}):Play()
+
+	for _,c in ipairs(resultCards) do c:Destroy() end
+	resultCards={}; resCon.Visible=false
+
+	local raw=rebBox.Text:gsub("[^%d]","")
+	local reb=tonumber(raw)
+
+	if not reb or reb<0 then
+		resCon.Visible=true
+		makeCard("✕","INVALID INPUT","Enter a valid rebirth number",RED,"Only positive integers accepted.",1)
+		return
+	end
+
+	local rock=rockData[selectedIdx]
+	local list=glitchLists[rock.name]
+	resCon.Visible=true
+	local order=1
+
+	local exact=nil
+	if list then
+		for _,e in ipairs(list) do
+			if e[1]==reb then exact=e; break end
+		end
+	end
+
+	if exact then
+		makeCard("✅","GLITCH AVAILABLE","+"..exact[2].." stats per punch",GREEN,
+			rock.icon.."  "..rock.name.."  •  Rebirth "..reb.."  •  Pet lv "..(exact[2]/5),order)
+		order+=1
+		if exact[3] and exact[3]>0 then makePreXP(exact[3],order); order+=1 end
+		makeCard("🚨","WARNING","Glitch disappears on disconnect!",RED,
+			"Do NOT close the game while using the glitch",order)
+	else
+		local bestBelow=nil
+		if list then
+			for _,e in ipairs(list) do
+				if e[1]<=reb then bestBelow=e else break end
+			end
+		end
+		if bestBelow then
+			local sub="Rebirth "..bestBelow[1].."  •  "..rock.icon.." "..rock.name
+			if bestBelow[3]>0 then sub=sub.."\n⚠️  Requires +"..bestBelow[3].." pre-loaded EXP" end
+			makeCard("◈","BEST GLITCH YOU CAN USE NOW","+"..bestBelow[2].." stats per punch",BLUE,sub,order)
+			order+=1
+		elseif list then
+			makeCard("⏳","NO GLITCH YET","First glitch: rebirth "..list[1][1],GRAY,
+				rock.icon.." "..rock.name.."  •  Keep grinding!",order)
+			order+=1
+		end
+
+		local nexts=getNextGlitches(reb,rock.name,3)
+		if #nexts>0 then
+			local lines={}
+			for _,s in ipairs(nexts) do
+				local pre=s.preXP>0 and ("  ⚠ +"..s.preXP.." pre-EXP") or ""
+				table.insert(lines,"Reb "..s.reb.."  →  +"..s.stats.." stats  (+".. (s.reb-reb) .." away)"..pre)
+			end
+			makeCard("→","UPCOMING GLITCH REBIRTHS",lines[1],AMBER,
+				(#lines>1 and table.concat(lines,"\n",2) or nil),order)
+			order+=1
+		end
+
+		makeCard("ℹ","REBIRTH "..reb.." NOT IN LIST","Not a glitchable rebirth for "..rock.name,DIMGRAY,
+			"Aim for one of the rebirths listed above",order)
+	end
+end)
+
+-- ============================================================
+-- ENTRANCE ANIMATION
+-- ============================================================
+win.Size=UDim2.new(0,0,0,0); bgFr.BackgroundTransparency=1
+TweenService:Create(bgFr,TweenInfo.new(0.3),{BackgroundTransparency=0.5}):Play()
+TweenService:Create(win,TweenInfo.new(0.38,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,W,0,H)}):Play()
