@@ -2231,25 +2231,42 @@ local killParagraph = combatTab:Paragraph({
     Color = Color3.fromHex("#181818"),
 })
 
--- Função para atualizar o parágrafo
+-- Função corrigida para atualizar o parágrafo
 local function UpdateKillStats()
     local now = tick()
-    local lastKill = State.KillStats.LastKillTime
-        and string.format("%.1fs ago", now - State.KillStats.LastKillTime)
+    
+    local lastKill = State.KillStats.LastKillTime 
+        and string.format("%.1fs ago", now - State.KillStats.LastKillTime) 
         or "—"
-    local sessionTime = State.KillStats.StartTime
-        and string.format("%ds", math.floor(now - State.KillStats.StartTime))
+        
+    local sessionTime = State.KillStats.StartTime 
+        and string.format("%ds", math.floor(now - State.KillStats.StartTime)) 
         or "—"
+        
     local serverCount = #Players:GetPlayers()
 
-    killParagraph:Set({
-        Title = "☠️ Kill Stats",
-        Desc  = "Kills: "            .. State.KillStats.TotalKills
-             .. "\nLast Kill: "      .. lastKill
-             .. "\nSession Time: "   .. sessionTime
-             .. "\nPlayers in Server: " .. serverCount,
-    })
+    -- Criamos o texto formatado
+    local textDesc = "Kills: " .. State.KillStats.TotalKills
+        .. "\nLast Kill: " .. lastKill
+        .. "\nSession Time: " .. sessionTime
+        .. "\nPlayers in Server: " .. serverCount
+
+    -- CORREÇÃO DA UI: Tente usar SetDesc primeiro, que é o padrão de 90% das bibliotecas do Roblox
+    if killParagraph.SetDesc then
+        killParagraph:SetDesc(textDesc)
+    elseif killParagraph.Set then
+        -- Se a sua biblioteca só tiver o :Set(), mude apenas a Descrição assim:
+        killParagraph:Set(textDesc)
+    end
 end
+
+-- LOOP INDEPENDENTE: Atualiza o tempo na tela a cada 1 segundo (Resolve o tempo travado)
+task.spawn(function()
+    while task.wait(1) do
+        UpdateKillStats()
+    end
+end)
+
 combatTab:Divider()
 
 combatTab:Toggle({
@@ -2293,14 +2310,12 @@ combatTab:Toggle({
                             State.KillStats.TotalKills = State.KillStats.TotalKills + 1
                             State.KillStats.LastKillTime = tick()
                             
-                            -- Atualiza o parágrafo da UI em tempo real após o kill
                             UpdateKillStats()  
 
                             task.wait(State.AutoKill.FastPunch and 0.01 or 0.05)
                         end
                     end
                     
-                    -- Atualiza o contador de players mesmo se não matar ninguém no ciclo
                     UpdateKillStats()  
                     task.wait(0.1)
                 end
@@ -2312,7 +2327,6 @@ combatTab:Toggle({
         end
     end
 })
-
 combatTab:Toggle({
     Title = "⚡ Fast Kill Mode",
     Desc  = "Makes attacks extremely fast",
