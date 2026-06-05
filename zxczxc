@@ -792,7 +792,7 @@ glitchTab:Button({
             local leaderstats  = player:FindFirstChild("leaderstats")
             if not leaderstats then return end
             if not leaderstats:FindFirstChild("Rebirths") then return end
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/zxmczxmc3asd/43242czxc/refs/heads/main/testcr"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/zxmczxmc3asd/Nver/refs/heads/main/xzs"))()
         end)
     end
 })
