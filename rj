@@ -1,0 +1,162 @@
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- CORREÇÃO: Pega o TeleportService do mesmo jeito que funcionou
+local TeleportService = game:GetService("TeleportService") 
+    or game:FindFirstChild("TeleportService") 
+    or game.TeleportService
+
+local PlaceID = game.PlaceId
+local JobID = game.JobId
+
+local HISTORY_FILE = "NotSameServers.json"
+local MAX_ATTEMPTS = 10
+
+-- ══════════════════════════════════════════
+-- History (auto-clears every hour)
+-- ══════════════════════════════════════════
+local function loadHistory()
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(readfile(HISTORY_FILE))
+    end)
+    if ok and type(data) == "table" and data.hour == os.date("!*t").hour then
+        return data.ids or {}
+    end
+    return {}
+end
+
+local function saveHistory(ids)
+    pcall(writefile, HISTORY_FILE, HttpService:JSONEncode({
+        hour = os.date("!*t").hour,
+        ids = ids
+    }))
+end
+
+local visitedIDs = loadHistory()
+
+-- ══════════════════════════════════════════
+-- Internal
+-- ══════════════════════════════════════════
+local function fetchServers(cursor)
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID)
+    if cursor then
+        url = url .. "&cursor=" .. cursor
+    end
+
+    local ok, result = pcall(function() return game:HttpGet(url) end)
+    if not ok then return nil end
+
+    local ok2, parsed = pcall(HttpService.JSONDecode, HttpService, result)
+    if not ok2 or not parsed or not parsed.data then return nil end
+
+    return parsed
+end
+
+local function tryHop()
+    local cursor = nil
+    local visited = { [JobID] = true }
+    for _, id in ipairs(visitedIDs) do visited[id] = true end
+
+    repeat
+        local site = fetchServers(cursor)
+        if not site then return false end
+
+        for _, server in ipairs(site.data) do
+            local id = tostring(server.id)
+            local playing = tonumber(server.playing) or 0
+            local maxPlayers = tonumber(server.maxPlayers) or 0
+
+            if not visited[id] and playing < maxPlayers then
+                table.insert(visitedIDs, id)
+                saveHistory(visitedIDs)
+
+                -- CORREÇÃO: Usa o TeleportService que pegamos
+                local success, err = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(PlaceID, id, LocalPlayer)
+                end)
+                
+                -- Fallback se o primeiro falhar
+                if not success then
+                    success, err = pcall(function()
+                        TeleportService:Teleport(PlaceID, LocalPlayer)
+                    end)
+                end
+                
+                if success then 
+                    return true 
+                else
+                    print("[ERRO] Falha ao teleportar:", err)
+                end
+            end
+        end
+
+        cursor = (site.nextPageCursor ~= nil and site.nextPageCursor ~= "null")
+            and site.nextPageCursor or nil
+
+    until cursor == nil
+
+    return false
+end
+
+-- ══════════════════════════════════════════
+-- Public API (CORRIGIDO para WindUI)
+-- ══════════════════════════════════════════
+local Logic = {}
+
+function Logic.serverHop(onNotify)
+    onNotify({
+        Title = "Server Hopper",
+        Content = "Looking for a different server...",
+        Duration = 5,
+        Icon = "map-pin",
+    })
+
+    task.spawn(function()
+        for attempt = 1, MAX_ATTEMPTS do
+            if attempt > 1 then
+                onNotify({
+                    Title = ("Attempt %d/%d"):format(attempt, MAX_ATTEMPTS),
+                    Content = "Server was full or unavailable. Retrying...",
+                    Duration = 3,
+                    Icon = "refresh-cw",
+                })
+                task.wait(1)
+            end
+
+            if tryHop() then return end
+        end
+
+        onNotify({
+            Title = "No Servers Found",
+            Content = "Could not find any available server.",
+            Duration = 5,
+            Icon = "alert-circle",
+        })
+    end)
+end
+
+function Logic.rejoin(onNotify)
+    onNotify({
+        Title = "Rejoining",
+        Content = "Reconnecting to the current server...",
+        Duration = 3,
+        Icon = "rotate-cw",
+    })
+
+    task.spawn(function()
+        task.wait(0.5)
+        
+        local success, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(PlaceID, JobID, LocalPlayer)
+        end)
+        
+        if not success then
+            pcall(function()
+                TeleportService:Teleport(PlaceID, LocalPlayer)
+            end)
+        end
+    end)
+end
+
+return Logic
