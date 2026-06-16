@@ -34,7 +34,7 @@ end
 local function NewGui(class, props)
     local inst = Instance.new(class)
     for k, v in pairs(props) do
-        inst[k] = v
+        pcall(function() inst[k] = v end)
     end
     return inst
 end
